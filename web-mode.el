@@ -314,7 +314,7 @@ See web-mode-block-face."
 
 (defcustom web-mode-extra-control-blocks '()
   "A list of additional control blocks."
-  :type '(alist :key-type string :value-type string)
+  :type '(alist :key-type string :value-type (repeat string))
   :group 'web-mode)
 
 (defcustom web-mode-tests-directory (concat default-directory "tests/")
@@ -1822,7 +1822,7 @@ shouldn't be moved back.)")
 (defvar web-mode-blade-control-blocks
   (append
    (cdr (assoc "blade" web-mode-extra-control-blocks))
-   '("component" "foreach" "forelse" "for" "if" "section" "slot" "switch" "unless" "while")
+   '("auth" "component" "empty" "foreach" "forelse" "for" "guest" "if" "isset" "section" "slot" "switch" "unless" "while")
    ))
 
 (defvar web-mode-blade-control-blocks-regexp
@@ -4980,7 +4980,15 @@ Also return non-nil if it is the command `self-insert-command' is remapped to."
           )
          ((web-mode-block-starts-with "stop\\|show\\|overwrite" reg-beg)
           (setq controls (append controls (list (cons 'close "section")))))
-         ((web-mode-block-starts-with "else\\|elseif" reg-beg)
+         ((web-mode-block-starts-with "else" reg-beg)
+          (setq pos (web-mode-control-block-match-position reg-beg))
+          (when pos
+            (setq controls (append controls
+                                   (list
+                                    (cons 'inside
+                                          (cdr (car (web-mode-block-controls-get pos))))))))
+          )
+         ((web-mode-block-starts-with "elseif" reg-beg)
           (setq controls (append controls (list (cons 'inside "if")))))
          ((web-mode-block-starts-with "empty" reg-beg)
           (setq controls (append controls (list (cons 'inside "forelse")))))
@@ -5150,7 +5158,6 @@ Also return non-nil if it is the command `self-insert-command' is remapped to."
 
       (put-text-property reg-beg (1+ reg-beg) 'block-controls controls)
       ;;(message "(%S) controls=%S" reg-beg controls)
-
       )))
 
 (defun web-mode-block-is-opened-sexp (reg-beg reg-end)
@@ -12565,6 +12572,29 @@ Prompt user if TAG-NAME isn't provided."
   (save-excursion
     (web-mode-block-match pos)
     (if (= pos (point)) nil (point))))
+
+(defun web-mode-control-block-match-position (&optional pos)
+  (unless pos (setq pos (point)))
+  (let ((continue t) (counter 1) type)
+    (while continue
+      (setq pos (web-mode-block-control-previous-position nil pos))
+      (cond
+       ((null pos)
+        (setq continue nil
+              pos nil))
+       (t
+        (setq type (car (car (web-mode-block-controls-get pos))))
+        (cond
+         ((eq type 'close)
+          (setq counter (1+ counter)))
+         ((eq type 'open)
+          (setq counter (1- counter)))
+         )
+        (when (<= counter 0)
+          (setq continue nil)))
+       )
+      )
+    pos))
 
 ;; type may be nil
 (defun web-mode-block-control-previous-position (type &optional pos)
